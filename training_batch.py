@@ -66,7 +66,8 @@ def logging(_info):
 
 
 def main():
-    root = 'D:/NRL/dataset/KONECT/'
+    # root = 'D:/NRL/dataset/KONECT/'
+    root = 'D:/NRL/dataset/bigdata/'
 
     name_list = []
     _name_list = []
@@ -132,7 +133,7 @@ def main():
             out_report = [_name, stats_G0[0], stats_G0[1], time_G0, time_Gaf, time_delta, time_redu,
                           stats_Gaf[0], stats_Gaf[1], v_redu, e_redu,
                           num_fans, avg_fan_size, num_conn2, num_conn3, num_traids, det_res[-1], trans_res[-1]]
-            with open('konect_SME_report-localhost-2.csv', 'a', newline="") as f:
+            with open('konect_SME_report-biggraph.csv', 'a', newline="") as f:
                 csv_writer = csv.writer(f)
                 csv_writer.writerow(out_report)
 
@@ -142,5 +143,5 @@ def main():
 
 
 if __name__ == '__main__':
-    for i in range(0, 5):
+    for i in range(0, 1):
         main()

@@ -1,10 +1,15 @@
+from concurrent.futures import ProcessPoolExecutor
 from collections import defaultdict, Iterable
 from six import iterkeys
 import random
 import networkx as nx
 import pandas as pd
+from time import time
 from itertools import islice
-
+import training_batch as tb
+from six.moves import zip_longest
+from multiprocessing import cpu_count
+from os import path
 __author__ = "Andrian Lee, Chen, Yubo Tao"
 
 
@@ -121,6 +126,11 @@ class GraphImpl(defaultdict):
         return [str(node) for node in path]
 
 
+def grouper(n, iterable, padvalue=None):
+    "grouper(3, 'abcdefg', 'x') --> ('a','b','c'), ('d','e','f'), ('g','x','x')"
+    return zip_longest(*[iter(iterable)]*n, fillvalue=padvalue)
+
+
 def load_edgelist(_filepath, _name=None, undirected=True):
     f = open(_filepath)
     lines = f.readlines()
@@ -167,6 +177,14 @@ def GraphImpl2disk(G, _path):
     f.close()
 
 
+def count_lines(f):
+  if path.isfile(f):
+    num_lines = sum(1 for line in open(f))
+    return num_lines
+  else:
+    return 0
+
+
 def build_deepwalk_corpus(G, num_paths, path_length, alpha=0,
                           rand=random.Random(0)):
     walks = []
@@ -188,3 +206,45 @@ def build_deepwalk_corpus_iter(G, num_paths, path_length, alpha=0,
         rand.shuffle(nodes)
         for node in nodes:
             yield G.random_walk(path_length, rand=rand, alpha=alpha, start=node)
+
+
+def _write_walks_to_disk(args):
+    num_paths, path_length, alpha, rand, f = args
+    G = __current_graph
+    t_0 = time()
+    with open(f, 'w') as fout:
+        for walk in build_deepwalk_corpus_iter(G=G, num_paths=num_paths, path_length=path_length,
+                                               alpha=alpha, rand=rand):
+            fout.write(u"{}\n".format(u" ".join(v for v in walk)))
+    tb.logging("Generated new file {}, it took {} seconds".format(f, time() - t_0))
+    return f
+
+
+def write_walks_to_disk(G, filebase, num_paths, path_length, alpha=0, rand=random.Random(0), num_workers=cpu_count(),
+                        always_rebuild=True):
+    global __current_graph
+    __current_graph = G
+    files_list = ["{}.{}".format(filebase, str(x)) for x in list(range(num_paths))]
+    expected_size = len(G)
+    args_list = []
+    files = []
+
+    if num_paths <= num_workers:
+        paths_per_worker = [1 for x in range(num_paths)]
+    else:
+        paths_per_worker = [len(list(filter(lambda z: z!= None, [y for y in x])))
+                            for x in grouper(int(num_paths / num_workers)+1, range(1, num_paths+1))]
+
+    with ProcessPoolExecutor(max_workers=num_workers) as executor:
+        for size, file_, ppw in zip(executor.map(count_lines, files_list), files_list, paths_per_worker):
+            if always_rebuild or size != (ppw*expected_size):
+                args_list.append((ppw, path_length, alpha, random.Random(rand.randint(0, 2**31)), file_))
+            else:
+                files.append(file_)
+
+    with ProcessPoolExecutor(max_workers=num_workers) as executor:
+        for file_ in executor.map(_write_walks_to_disk, args_list):
+            files.append(file_)
+
+    return files
+

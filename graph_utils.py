@@ -3,7 +3,6 @@ from collections import defaultdict, Iterable
 from six import iterkeys
 import random
 import networkx as nx
-import pandas as pd
 from time import time
 from itertools import islice
 import training_batch as tb
@@ -131,15 +130,28 @@ def grouper(n, iterable, padvalue=None):
     return zip_longest(*[iter(iterable)]*n, fillvalue=padvalue)
 
 
-def load_edgelist(_filepath, _name=None, undirected=True):
+def load_edgelist(_filepath, _type=None, _name=None, undirected=True):
+    """ type default for space delimeter
+    :param _filepath:
+    :param _type:
+    :param _name:
+    :param undirected:
+    :return:
+    """
     f = open(_filepath)
     lines = f.readlines()
     f.close()
 
+    delimeter = ' '
+    if _type == 'csv':
+        delimeter = ','
+    elif _type == 't':
+        delimeter = '\t'
+
     G = GraphImpl(_name)
     for line in lines:
         line = line.strip()
-        u, v = line.split()[:2]
+        u, v = line.split(delimeter)[:2]
         G[int(u)].append(int(v))
         if undirected:
             G[int(v)].append(int(u))
@@ -161,6 +173,17 @@ def load_emb(_embpath):
     return feature_set
 
 
+def load_emb2(_embpath):
+    with open(_embpath) as f:
+        lines = f.readlines()
+    feature_set = dict()
+    for line in islice(lines, 1, None):
+        l = [float(x) for x in line.split()]
+        feature_set[int(l[0])] = l[1:]
+
+    return feature_set
+
+
 def GraphImpl2nx(G):
     out = nx.Graph()
     for k in G.keys():
@@ -178,11 +201,11 @@ def GraphImpl2disk(G, _path):
 
 
 def count_lines(f):
-  if path.isfile(f):
-    num_lines = sum(1 for line in open(f))
-    return num_lines
-  else:
-    return 0
+    if path.isfile(f):
+        num_lines = sum(1 for line in open(f))
+        return num_lines
+    else:
+        return 0
 
 
 def build_deepwalk_corpus(G, num_paths, path_length, alpha=0,

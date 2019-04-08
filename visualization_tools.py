@@ -6,6 +6,7 @@ from sklearn.manifold import TSNE
 import graph_utils as gu
 import pickle as pk
 import os
+from time import ctime
 from itertools import islice
 tsne = TSNE(learning_rate=100)
 pca = PCA(n_components=5)
@@ -91,7 +92,7 @@ def matplotlib_draw(g, node_dict, coor_dict, trans_dict=None, o=1, type='fans', 
     #     plt.annotate(ann, xy=(coor_dict[ann][0], coor_dict[ann][1]),
     #                  xytext=(coor_dict[ann][0] + 0.015, coor_dict[ann][1] + 0.015), fontsize=3)
 
-    root = './pic/'
+    root = './pic_tsne/'
     if o == 1:
         tit = g.name + '-' + type
         plt.title(tit)
@@ -104,14 +105,14 @@ def matplotlib_draw(g, node_dict, coor_dict, trans_dict=None, o=1, type='fans', 
     # plt.show()
 
 
-def vis_pipeline():
+def vis_pipeline(method):
     root = 'D:/NRL/dataset/KONECT/'
     name_list = []
     _name_list = []
     ori_graph_path = []
     # for n in os.listdir(root):
     #     _name_list.append(n)
-    with open('todolist.txt') as f:
+    with open('todolist2.txt') as f:
         _name_list = [x.strip() for x in f.readlines()]
 
     for _name in _name_list:
@@ -127,6 +128,7 @@ def vis_pipeline():
     for _name, _op in zip(name_list, ori_graph_path):
         print('To draw graph: ', _name)
         print(root + _name + _op)
+        print(ctime())
         g = gu.load_edgelist(root + _name + _op, _name=_name)  # todo
         gg = gu.load_edgelist(root + _name + '/out.new.' + _name, _name=_name)
         print('*'*50)
@@ -137,10 +139,10 @@ def vis_pipeline():
 
         try:
             feature_set0 = gu.load_emb(root + _name + '/' + _name + '0.emb')
-            coor_dict0 = emb2coor(g, feature_set0)
+            coor_dict0 = emb2coor(g, feature_set0, method=method)
 
             feature_set = gu.load_emb(root + _name + '/' + _name + '.emb')
-            coor_dict = emb2coor(gg, feature_set)
+            coor_dict = emb2coor(gg, feature_set, method=method)
 
             det_list = []
             trans_list = []
@@ -200,4 +202,4 @@ def main():
 
 if __name__ == '__main__':
     # main()
-    vis_pipeline()
+    vis_pipeline('tsne')

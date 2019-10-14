@@ -1,4 +1,4 @@
-# simple_motif
+# Simple Motif Embedding
 
 # Introduction
 

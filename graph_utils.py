@@ -9,7 +9,8 @@ import training_batch as tb
 from six.moves import zip_longest
 from multiprocessing import cpu_count
 from os import path
-__author__ = "Andrian Lee, Chen, Yubo Tao"
+
+__author__ = "Anzhou Li, Chuanchang Chen, Yubo Tao"
 
 
 class GraphImpl(defaultdict):
@@ -68,6 +69,7 @@ class GraphImpl(defaultdict):
         return self
 
     def make_consistent(self):
+        """remove multi-edge"""
         for k in iterkeys(self):
             self[k] = list(sorted(set(self[k])))
 
@@ -131,11 +133,11 @@ def grouper(n, iterable, padvalue=None):
 
 
 def load_edgelist(_filepath, _type=None, _name=None, undirected=True):
-    """ type default for space delimeter
+    """
     :param _filepath:
-    :param _type:
+    :param _type: default for ' ' delimeter
     :param _name:
-    :param undirected:
+    :param undirected: default True
     :return:
     """
     f = open(_filepath)

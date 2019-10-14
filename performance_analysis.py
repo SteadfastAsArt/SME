@@ -6,6 +6,18 @@ from sklearn.metrics import roc_auc_score, roc_curve
 import random
 import numpy as np
 from time import ctime
+import multiprocessing
+import math
+
+
+def random_list(l, rate):
+    res = []
+    init = 0
+    inter = math.ceil(len(l) / rate)
+    for i in range(rate):
+        init += inter
+        res.append(l[(init) % len(l)])
+    return res
 
 
 def sample_positive(g, emb, rate=0):
@@ -19,7 +31,8 @@ def sample_positive(g, emb, rate=0):
                 X.append(ob.euclidean_dist(emb[k], emb[i]))  # What kind of distance of long distance todo
                 lable.append(1)
     if rate != 0:
-        X = random.sample(X, rate)
+        # X = random.sample(X, rate)
+        X = random_list(X, rate)
         lable = lable[:rate]
     print('num_postive samples:', len(X))
     print('End sample_positive', ctime())
@@ -48,6 +61,7 @@ def sample_negative(g, emb, rate):
 
     print('Start sample_negative', ctime())
     ran_sampl = random.sample(range(1, num_e+1), rate)  # edge indexed from 1
+    # ran_sampl = random_list(range(1, num_e + 1), rate)
 
     gk = sorted(g.keys())
     for r in ran_sampl:
@@ -110,6 +124,21 @@ def f1_score(lable_true, lable_pre):
     print('F1-score: {}'.format(2 * recall * precision / (recall + precision)))
 
 
+def check_rel3(start, inter, g, _motif, emb, ):
+    l3 = []
+    _x3 = []
+    end = start + inter # if start + inter < len(g.keys()) else len(g.keys())
+    for idn, n in enumerate(g.nodes(), start):  # parallel, n-th node
+        if idn >= end: break
+        for k in _motif.keys():
+            if n not in _motif.keys() and n not in _motif[k]:
+                for s in _motif[k]:  # s: spanner
+                    _x3.append(ob.euclidean_dist(emb[s], emb[n]))
+                    l3.append(0)
+
+    return [_x3, l3]
+
+
 def motif_performance_specific(_motif, clf, g, emb, _type):
     """ { anchors: spanners }
     3 types of relations:
@@ -149,14 +178,25 @@ def motif_performance_specific(_motif, clf, g, emb, _type):
 
     # spanners <-> outside world: no edge
     print('spanners <-> outside world: no edge')
+
+    multiprocessing.freeze_support()
+    pool = multiprocessing.Pool()
+    cpus = multiprocessing.cpu_count()
+    print('cpus', cpus)
+    results = []
+
+    inter = int(len(g.nodes())/cpus)
+    for i in range(cpus):
+        results.append(pool.apply_async(check_rel3, args=(i*inter, inter, g, _motif, emb, )))
+    pool.close()
+    pool.join()
+
     l3 = []
     _x3 = []
-    for k in _motif.keys():
-        for s in _motif[k]:  # s: spanner
-            for n in g.keys():
-                if n not in _motif.keys() and n not in _motif[k]:  # n: not in motif
-                    _x3.append(ob.euclidean_dist(emb[s], emb[n]))
-                    l3.append(0)
+    for result in results:
+        _x3.extend(result.get()[0])
+        l3.extend(result.get()[1])
+
     x3 = np.array(_x3).reshape(-1, 1)
     l3_pre = clf.predict(x3)
     f1_score(l3, l3_pre)
@@ -183,21 +223,16 @@ def motif_performance_compare(dir, name, clf, g, emb, f1=1, f2=1, f3=1):
         motif_performance_specific(triad, clf, g, emb, 'triad')
 
 
-def main(ifFull=False, _original=False):
-    root = 'D:\\NRL\dataset\KONECT\\'
-    _name = 'arenas-pgp'
-    _dir = root + _name + '/'
-
-    g_file = 'out.arenas-pgp'
+def main(_dir, _name, g_file, method, ifFull=False, _original=False):
     if _original:
-        emb_file = 'dblp-cite0.emb'
+        emb_file = _name + '0.' + method + '.emb'
     else:
-        emb_file = 'test1.emb'
+        emb_file = _name + '1.' + method + '.emb'
 
     print('Start', ctime())
     print(_name)
     emb0 = gu.load_emb2(_dir + emb_file)
-    g0 = gu.load_edgelist(_dir + g_file, _name=_name, )
+    g0 = gu.load_edgelist(_dir + g_file, _name=_name, )  # _type='t'
 
     _X = []
     _label = []
@@ -237,10 +272,16 @@ def main(ifFull=False, _original=False):
         print('auc-prob: ', auc2)
     else:
         print('Motif specific:')
-        motif_performance_compare(_dir, _name, LogR, g0, emb0, f1=0, f2=1, f3=1)
+        motif_performance_compare(_dir, _name, LogR, g0, emb0, f1=1, f2=1, f3=1)
 
     print('End', ctime())
 
 
 if __name__ == '__main__':
-    main()
+    root = './dataset/_social/'
+    _name = 'arenas-pgp'
+    _dir = root + _name + '/'
+    g_file = 'out.arenas-pgp'
+    method = 'dw'  # enum: {gf, dw, n2v, line, sage}
+    main(_dir, _name, g_file, method, _original=False)
+    main(_dir, _name, g_file, method, _original=True)

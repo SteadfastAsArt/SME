@@ -11,6 +11,7 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 import pandas as pd
 import numpy as np
+import misc_utils as mu
 
 tsne = TSNE(learning_rate=100)
 pca = PCA(n_components=5)
@@ -18,7 +19,7 @@ pca = PCA(n_components=5)
 __author__ = "Andrian Lee, Chen, Yubo Tao"
 
 
-class Connector(object):
+class AS(object):
     def __init__(self, _anchors=[]):
         self.anchors = _anchors
         self.spanners = []
@@ -90,14 +91,37 @@ def find_connectors(G, D=2):
     return _conn
 
 
+def detect(G, _path):
+    print("Start detecting...")
+    start_t = time.time()
+    _fans = find_fans(G)
+    _conn2 = find_connectors(G, D=2)
+    print("connectors finished")
+    _triads = find_triad(G)
+    end_t = time.time()
+    time_delta = round(end_t - start_t, 3)
+    print("End detecting...")
+
+    det_out = [_fans, _conn2, _triads, time_delta]
+
+    mu.serialization(_fans, _path+'/det_fans.'+G.name)
+    mu.serialization(_conn2, _path + '/det_conn2.' + G.name)
+    mu.serialization(_triads, _path + '/det_triads.' + G.name)
+
+    return det_out
+
+
 def collapse(G, rm_dict):
-    nextid = max(G.nodes()) + 1
     transfer_dict = defaultdict(list)
     """
         rm_dict: { anchors: spanners, ..., }; from `find` procedure
         anchors: tuple
         spanners: list
+        ---
+        transfer_dict: { new_node: spanners }
     """
+    nextid = max(G.nodes()) + 1
+
     for t in rm_dict.keys():
         transfer_dict[nextid] = rm_dict[t]
         # s: single spanner
@@ -120,30 +144,22 @@ def collapse(G, rm_dict):
     return transfer_dict
 
 
-def training(G, _filepath, o=1, number_walks=10, walk_length=80, representation_size=128, window_size=5, max_memory_data_size = 6e8):
-    data_size = number_walks * walk_length
-    print("Data size (walks*length): {}".format(data_size))
-    output = _filepath + G.name
-    # if data_size < max_memory_data_size:
-    if True:
-        print("Walking...")
-        time_start = time.time()
-        walks = gu.build_deepwalk_corpus(G, num_paths=number_walks, path_length=walk_length,
-                                         alpha=0, rand=random.Random(0))
-        time_end = time.time()
-        print('Walking time cost:', time_end - time_start)
+def transform(G, motif_list, _path):
+    print("Start transforming...")
+    start_t = time.time()
+    transfer_fans = collapse(G, motif_list[0])
+    transfer_conn2 = collapse(G, motif_list[1])
+    transfer_triads = collapse(G, motif_list[2])
+    end_t = time.time()
+    time_delta = round(end_t - start_t, 3)
+    print("End transforming...")
 
-        print("Training...")
-        time_start = time.time()
-        model = Word2Vec(walks, size=representation_size, window=window_size, min_count=0, sg=1, hs=1, workers=5)
-        time_end = time.time()
-        print('Training vectors time cost:', time_end - time_start)
-    else:
-        print("Data size {} is larger than limit (max-memory-data-size: {}).  Dumping walks to disk.".format(data_size, args.max_memory_data_size))
-        print("Walking...")
-    if o == 1:
-        model.wv.save_word2vec_format(output + '.emb')
-    else:
-        model.wv.save_word2vec_format(output + '0.emb')
+    trans_out = [transfer_fans, transfer_conn2, transfer_triads, time_delta]
 
-    return time_end - time_start, 1
+    gu.GraphImpl2disk(G, _path+'/out.new.'+G.name)
+
+    mu.serialization(transfer_fans, _path + '/trans_fans.' + G.name)
+    mu.serialization(transfer_conn2, _path + '/trans_conn2.' + G.name)
+    mu.serialization(transfer_triads, _path + '/trans_triads.' + G.name)
+
+    return trans_out
